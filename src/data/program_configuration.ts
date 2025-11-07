@@ -4,7 +4,6 @@ import {register} from '../util/web_worker_transfer';
 import {PossiblyEvaluatedPropertyValue} from '../style/properties';
 import {StructArrayLayout1f4, StructArrayLayout2f8, StructArrayLayout4f16, PatternLayoutArray, DashLayoutArray} from './array_types.g';
 import {clamp} from '../util/util';
-import {now} from '../util/time_control';
 import {patternAttributes} from './bucket/pattern_attributes';
 import {dashAttributes} from './bucket/dash_attributes';
 import {EvaluationParameters} from '../style/evaluation_parameters';

@@ -62,7 +62,6 @@ describe('SourceFeatureState transitions', () => {
 
     test('does not track transitions when no transition spec provided', () => {
         const sourceState = new SourceFeatureState();
-        const now = 1000;
         
         sourceState.updateState('layer1', 'feature1', {hover: true});
         
