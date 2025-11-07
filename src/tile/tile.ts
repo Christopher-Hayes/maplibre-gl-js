@@ -462,7 +462,7 @@ export class Tile {
         }
     }
 
-    setFeatureState(states: LayerFeatureStates, painter: any, sourceFeatureState?: any) {
+    setFeatureState(states: LayerFeatureStates, painter: any, sourceFeatureState?: SourceFeatureState) {
         if (!this.latestFeatureIndex ||
             !this.latestFeatureIndex.rawTileData ||
             Object.keys(states).length === 0) {
@@ -493,7 +493,7 @@ export class Tile {
      * Update feature state transitions during rendering
      * This is called every frame to update interpolated values
      */
-    updateFeatureStateTransitions(painter: any, sourceFeatureState: any, currentTime: number) {
+    updateFeatureStateTransitions(painter: any, sourceFeatureState: SourceFeatureState, currentTime: number) {
         if (!this.latestFeatureIndex || !this.latestFeatureIndex.rawTileData || !sourceFeatureState) {
             return;
         }
