@@ -3,7 +3,7 @@ import type {Style} from '../style/style';
 import type {TypedStyleLayer} from '../style/style_layer/typed_style_layer';
 import type {FeatureIndex} from './feature_index';
 import type {Context} from '../gl/context';
-import type {FeatureStates} from '../source/source_state';
+import type {FeatureStates, SourceFeatureState} from '../source/source_state';
 import type {ImagePosition} from '../render/image_atlas';
 import type {CanonicalTileID} from '../tile/tile_id';
 import type {VectorTileFeature, VectorTileLayer} from '@mapbox/vector-tile';
@@ -87,7 +87,7 @@ export interface Bucket {
     readonly stateDependentLayers: Array<any>;
     readonly stateDependentLayerIds: Array<string>;
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID): void;
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}, dashPositions: Record<string, DashEntry>, sourceFeatureState?: any, currentTime?: number): void;
+    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}, dashPositions: Record<string, DashEntry>, sourceFeatureState?: SourceFeatureState, currentTime?: number): void;
     isEmpty(): boolean;
     upload(context: Context): void;
     uploadPending(): boolean;
