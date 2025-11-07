@@ -29,7 +29,7 @@ import type {
     CompositeExpression,
     FormattedSection
 } from '@maplibre/maplibre-gl-style-spec';
-import type {FeatureStates} from '../source/source_state';
+import type {FeatureStates, SourceFeatureState} from '../source/source_state';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
 import type {DashEntry} from '../render/line_atlas';
 
@@ -226,7 +226,7 @@ class SourceExpressionBinder implements AttributeBinder {
         this._setPaintValue(start, newLength, value);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: any, featureId?: string | number, currentTime?: number, property?: string) {
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: SourceFeatureState, featureId?: string | number, currentTime?: number, property?: string) {
         let value;
         
         if (sourceFeatureState && featureId && currentTime !== undefined && property) {
@@ -339,7 +339,7 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
         this._setPaintValue(start, newLength, min, max);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: any, featureId?: string | number, currentTime?: number, property?: string) {
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: SourceFeatureState, featureId?: string | number, currentTime?: number, property?: string) {
         let min, max;
         
         if (sourceFeatureState && featureId && currentTime !== undefined && property) {
@@ -659,7 +659,7 @@ export class ProgramConfiguration {
         vtLayer: VectorTileLayer,
         layer: TypedStyleLayer,
         options: PaintOptions,
-        sourceFeatureState?: any,
+        sourceFeatureState?: SourceFeatureState,
         currentTime?: number
     ): boolean {
         let dirty: boolean = false;
@@ -822,7 +822,7 @@ export class ProgramConfigurationSet<Layer extends TypedStyleLayer> {
         this.needsUpload = true;
     }
 
-    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions, sourceFeatureState?: any, currentTime?: number) {
+    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions, sourceFeatureState?: SourceFeatureState, currentTime?: number) {
         for (const layer of layers) {
             this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options, sourceFeatureState, currentTime) || this.needsUpload;
         }
