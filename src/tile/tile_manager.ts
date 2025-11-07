@@ -215,6 +215,17 @@ export class TileManager extends Evented {
         }
 
         this._state.coalesceChanges(this._tiles, this.map ? this.map.painter : null);
+        
+        // Update transitions during rendering if there are active transitions
+        // Call now() once per frame and pass it down to avoid repeated calls
+        const currentTime = now();
+        if (this._state.hasTransitions(currentTime)) {
+            for (const i in this._tiles) {
+                const tile = this._tiles[i];
+                tile.updateFeatureStateTransitions(this.map ? this.map.painter : null, this._state, currentTime);
+            }
+        }
+        
         for (const i in this._tiles) {
             const tile = this._tiles[i];
             tile.upload(context);
@@ -1161,14 +1172,22 @@ export class TileManager extends Evented {
             return true;
         }
 
+        const currentTime = now();
+
         if (isRasterType(this._source.type) && this._rasterFadeDuration > 0) {
-            const currentTime = now();
             for (const id in this._tiles) {
                 const tile = this._tiles[id];
                 if (tile.fadeEndTime >= currentTime) {
                     return true;
                 }
             }
+        }
+
+        // Check for active feature-state transitions
+        if (this._state.hasTransitions(currentTime)) {
+            // Clean up completed transitions
+            this._state.cleanupTransitions(currentTime);
+            return true;
         }
 
         return false;
@@ -1181,9 +1200,9 @@ export class TileManager extends Evented {
     /**
      * Set the value of a particular state for a feature
      */
-    setFeatureState(sourceLayer: string, featureId: number | string, state: any) {
+    setFeatureState(sourceLayer: string, featureId: number | string, state: any, transitionSpec?: {duration: number; delay: number}, now?: number) {
         sourceLayer = sourceLayer || '_geojsonTileLayer';
-        this._state.updateState(sourceLayer, featureId, state);
+        this._state.updateState(sourceLayer, featureId, state, transitionSpec, now);
     }
 
     /**

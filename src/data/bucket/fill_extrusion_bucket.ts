@@ -28,7 +28,7 @@ import type {Context} from '../../gl/context';
 import type {IndexBuffer} from '../../gl/index_buffer';
 import type {VertexBuffer} from '../../gl/vertex_buffer';
 import type Point from '@mapbox/point-geometry';
-import type {FeatureStates} from '../../source/source_state';
+import type {FeatureStates, SourceFeatureState} from '../../source/source_state';
 import type {ImagePosition} from '../../render/image_atlas';
 import {subdividePolygon, subdivideVertexLine} from '../../render/subdivision';
 import type {SubdivisionGranularitySetting} from '../../render/subdivision_granularity_settings';
@@ -133,11 +133,11 @@ export class FillExtrusionBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}, dashPositions?: any, sourceFeatureState?: SourceFeatureState, currentTime?: number) {
         if (!this.stateDependentLayers.length) return;
         this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
             imagePositions
-        });
+        }, sourceFeatureState, currentTime);
     }
 
     isEmpty() {

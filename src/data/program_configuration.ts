@@ -9,6 +9,7 @@ import {dashAttributes} from './bucket/dash_attributes';
 import {EvaluationParameters} from '../style/evaluation_parameters';
 import {FeaturePositionMap} from './feature_position_map';
 import {type Uniform, Uniform1f, UniformColor, Uniform4f} from '../render/uniform_binding';
+import {calculateInterpolationFactor, interpolateValue} from '../util/transition_helper';
 
 import type {UniformLocations} from '../render/uniform_binding';
 
@@ -27,7 +28,7 @@ import type {
     CompositeExpression,
     FormattedSection
 } from '@maplibre/maplibre-gl-style-spec';
-import type {FeatureStates} from '../source/source_state';
+import type {FeatureStates, SourceFeatureState} from '../source/source_state';
 import type {VectorTileLayer} from '@mapbox/vector-tile';
 import type {DashEntry} from '../render/line_atlas';
 
@@ -224,8 +225,47 @@ class SourceExpressionBinder implements AttributeBinder {
         this._setPaintValue(start, newLength, value);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions) {
-        const value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: SourceFeatureState, featureId?: string | number, currentTime?: number, property?: string) {
+        let value;
+        
+        if (sourceFeatureState && featureId && currentTime !== undefined && property) {
+            const sourceLayerId = (feature as any).sourceLayer || '_geojsonTileLayer';
+            const transState = sourceFeatureState.getFeatureTransitionState(sourceLayerId, featureId);
+            
+            if (transState && transState.priorState) {
+                // Check if we're in transition using the passed currentTime
+                if (currentTime < transState.transitionEnd) {
+                    // We're in transition - check if we have cached values
+                    transState.cachedValues = transState.cachedValues || {};
+                    
+                    let priorValue, currentValue;
+                    if (transState.cachedValues[property]) {
+                        // Use cached values - no need to re-evaluate expressions!
+                        priorValue = transState.cachedValues[property].prior;
+                        currentValue = transState.cachedValues[property].current;
+                    } else {
+                        // First frame of transition - evaluate and cache
+                        priorValue = this.expression.evaluate(new EvaluationParameters(0, options), feature, transState.priorState);
+                        currentValue = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+                        transState.cachedValues[property] = {prior: priorValue, current: currentValue};
+                    }
+                    
+                    // Calculate interpolation factor and interpolate
+                    const t = calculateInterpolationFactor(currentTime, transState.transitionBegin, transState.transitionEnd);
+                    value = interpolateValue(priorValue, currentValue, t, this.type as 'color' | 'number');
+                } else {
+                    // Transition complete
+                    value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+                }
+            } else {
+                // No transition
+                value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+            }
+        } else {
+            // No transition state available
+            value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+        }
+        
         this._setPaintValue(start, end, value);
     }
 
@@ -298,9 +338,60 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
         this._setPaintValue(start, newLength, min, max);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions) {
-        const min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
-        const max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: SourceFeatureState, featureId?: string | number, currentTime?: number, property?: string) {
+        let min, max;
+        
+        if (sourceFeatureState && featureId && currentTime !== undefined && property) {
+            const sourceLayerId = (feature as any).sourceLayer || '_geojsonTileLayer';
+            const transState = sourceFeatureState.getFeatureTransitionState(sourceLayerId, featureId);
+            
+            if (transState && transState.priorState) {
+                // Check if we're in transition using the passed currentTime
+                if (currentTime < transState.transitionEnd) {
+                    // We're in transition - check if we have cached values
+                    transState.cachedValues = transState.cachedValues || {};
+                    
+                    // For composite expressions, we cache both min and max
+                    const minKey = property + '_min';
+                    const maxKey = property + '_max';
+                    
+                    let priorMin, priorMax, currentMin, currentMax;
+                    if (transState.cachedValues[minKey] && transState.cachedValues[maxKey]) {
+                        // Use cached values - no need to re-evaluate expressions!
+                        priorMin = transState.cachedValues[minKey].prior;
+                        currentMin = transState.cachedValues[minKey].current;
+                        priorMax = transState.cachedValues[maxKey].prior;
+                        currentMax = transState.cachedValues[maxKey].current;
+                    } else {
+                        // First frame of transition - evaluate and cache
+                        priorMin = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, transState.priorState);
+                        priorMax = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, transState.priorState);
+                        currentMin = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                        currentMax = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+                        transState.cachedValues[minKey] = {prior: priorMin, current: currentMin};
+                        transState.cachedValues[maxKey] = {prior: priorMax, current: currentMax};
+                    }
+                    
+                    // Calculate interpolation factor and interpolate
+                    const t = calculateInterpolationFactor(currentTime, transState.transitionBegin, transState.transitionEnd);
+                    min = interpolateValue(priorMin, currentMin, t, this.type as 'color' | 'number');
+                    max = interpolateValue(priorMax, currentMax, t, this.type as 'color' | 'number');
+                } else {
+                    // Transition complete
+                    min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                    max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+                }
+            } else {
+                // No transition
+                min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+            }
+        } else {
+            // No transition state available
+            min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+            max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+        }
+        
         this._setPaintValue(start, end, min, max);
     }
 
@@ -566,7 +657,9 @@ export class ProgramConfiguration {
         featureMap: FeaturePositionMap,
         vtLayer: VectorTileLayer,
         layer: TypedStyleLayer,
-        options: PaintOptions
+        options: PaintOptions,
+        sourceFeatureState?: SourceFeatureState,
+        currentTime?: number
     ): boolean {
         let dirty: boolean = false;
         for (const id in featureStates) {
@@ -582,7 +675,7 @@ export class ProgramConfiguration {
                         //AHM: Remove after https://github.com/mapbox/mapbox-gl-js/issues/6255
                         const value = (layer.paint as any).get(property);
                         binder.expression = value.value;
-                        binder.updatePaintArray(pos.start, pos.end, feature, featureStates[id], options);
+                        binder.updatePaintArray(pos.start, pos.end, feature, featureStates[id], options, sourceFeatureState, id, currentTime, property);
                         dirty = true;
                     }
                 }
@@ -728,9 +821,9 @@ export class ProgramConfigurationSet<Layer extends TypedStyleLayer> {
         this.needsUpload = true;
     }
 
-    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions) {
+    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions, sourceFeatureState?: SourceFeatureState, currentTime?: number) {
         for (const layer of layers) {
-            this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options) || this.needsUpload;
+            this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options, sourceFeatureState, currentTime) || this.needsUpload;
         }
     }
 

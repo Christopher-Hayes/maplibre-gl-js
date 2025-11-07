@@ -462,7 +462,7 @@ export class Tile {
         }
     }
 
-    setFeatureState(states: LayerFeatureStates, painter: any) {
+    setFeatureState(states: LayerFeatureStates, painter: any, sourceFeatureState?: SourceFeatureState) {
         if (!this.latestFeatureIndex ||
             !this.latestFeatureIndex.rawTileData ||
             Object.keys(states).length === 0) {
@@ -481,10 +481,41 @@ export class Tile {
             const sourceLayerStates = states[sourceLayerId];
             if (!sourceLayer || !sourceLayerStates || Object.keys(sourceLayerStates).length === 0) continue;
 
-            bucket.update(sourceLayerStates, sourceLayer, this.imageAtlas && this.imageAtlas.patternPositions || {}, this.dashPositions || {});
+            bucket.update(sourceLayerStates, sourceLayer, this.imageAtlas && this.imageAtlas.patternPositions || {}, this.dashPositions || {}, sourceFeatureState);
             const layer = painter && painter.style && painter.style.getLayer(id);
             if (layer) {
                 this.queryPadding = Math.max(this.queryPadding, layer.queryRadius(bucket));
+            }
+        }
+    }
+
+    /**
+     * Update feature state transitions during rendering
+     * This is called every frame to update interpolated values
+     */
+    updateFeatureStateTransitions(painter: any, sourceFeatureState: SourceFeatureState, currentTime: number) {
+        if (!this.latestFeatureIndex || !this.latestFeatureIndex.rawTileData || !sourceFeatureState) {
+            return;
+        }
+
+        const vtLayers = this.latestFeatureIndex.loadVTLayers();
+
+        for (const id in this.buckets) {
+            if (!painter.style.hasLayer(id)) continue;
+
+            const bucket = this.buckets[id];
+            if (!bucket.stateDependentLayers || bucket.stateDependentLayers.length === 0) continue;
+
+            const sourceLayerId = bucket.layers[0]['sourceLayer'] || '_geojsonTileLayer';
+            const sourceLayer = vtLayers[sourceLayerId];
+            if (!sourceLayer) continue;
+
+            // Only get features that are actively transitioning
+            // This avoids updating features that have no active transitions
+            const transitioningFeatures = sourceFeatureState.getTransitioningFeatures(sourceLayerId, currentTime);
+
+            if (Object.keys(transitioningFeatures).length > 0) {
+                bucket.update(transitioningFeatures, sourceLayer, this.imageAtlas && this.imageAtlas.patternPositions || {}, this.dashPositions || {}, sourceFeatureState, currentTime);
             }
         }
     }
