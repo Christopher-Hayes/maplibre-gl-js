@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Feature State Transitions Demo</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <script src="../../dist/maplibre-gl-dev.js"></script>
+    <link href="../../dist/maplibre-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: sans-serif;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="info">
+    <strong>Feature State Transitions Demo</strong><br>
+    Hover over the circles to see smooth color transitions<br>
+    using <code>setFeatureState()</code>
+</div>
+
+<script>
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            version: 8,
+            sources: {
+                'points': {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: [
+                            {
+                                type: 'Feature',
+                                id: 1,
+                                geometry: {type: 'Point', coordinates: [-100, 40]},
+                                properties: {name: 'Feature 1'}
+                            },
+                            {
+                                type: 'Feature',
+                                id: 2,
+                                geometry: {type: 'Point', coordinates: [-90, 40]},
+                                properties: {name: 'Feature 2'}
+                            },
+                            {
+                                type: 'Feature',
+                                id: 3,
+                                geometry: {type: 'Point', coordinates: [-80, 40]},
+                                properties: {name: 'Feature 3'}
+                            }
+                        ]
+                    }
+                }
+            },
+            layers: [
+                {
+                    id: 'points-layer',
+                    type: 'circle',
+                    source: 'points',
+                    paint: {
+                        'circle-radius': 30,
+                        'circle-color': [
+                            'case',
+                            ['boolean', ['feature-state', 'hover'], false],
+                            '#ff0000',  // Red when hovering
+                            '#0000ff'   // Blue when not hovering
+                        ],
+                        'circle-opacity': [
+                            'case',
+                            ['boolean', ['feature-state', 'hover'], false],
+                            1.0,
+                            0.5
+                        ]
+                    }
+                }
+            ],
+            // Configure transition for smooth animations
+            transition: {
+                duration: 300,
+                delay: 0
+            }
+        },
+        center: [-90, 40],
+        zoom: 4
+    });
+
+    let hoveredFeatureId = null;
+
+    map.on('mousemove', 'points-layer', (e) => {
+        if (e.features.length > 0) {
+            const newHoveredId = e.features[0].id;
+            
+            // Only update if we're hovering a different feature
+            if (newHoveredId !== hoveredFeatureId) {
+                // Clear previous hover state
+                if (hoveredFeatureId !== null) {
+                    map.setFeatureState(
+                        {source: 'points', id: hoveredFeatureId},
+                        {hover: false}
+                    );
+                }
+
+                // Set new hover state - this will now smoothly transition!
+                hoveredFeatureId = newHoveredId;
+                map.setFeatureState(
+                    {source: 'points', id: hoveredFeatureId},
+                    {hover: true}
+                );
+            }
+        }
+    });
+
+    map.on('mouseleave', 'points-layer', () => {
+        if (hoveredFeatureId !== null) {
+            map.setFeatureState(
+                {source: 'points', id: hoveredFeatureId},
+                {hover: false}
+            );
+            hoveredFeatureId = null;
+        }
+    });
+</script>
+</body>
+</html>

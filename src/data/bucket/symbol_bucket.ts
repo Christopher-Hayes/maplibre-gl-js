@@ -557,14 +557,14 @@ export class SymbolBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}, dashPositions?: any, sourceFeatureState?: any, currentTime?: number) {
         if (!this.stateDependentLayers.length) return;
         this.text.programConfigurations.updatePaintArrays(states, vtLayer, this.layers, {
             imagePositions
-        });
+        }, sourceFeatureState, currentTime);
         this.icon.programConfigurations.updatePaintArrays(states, vtLayer, this.layers, {
             imagePositions
-        });
+        }, sourceFeatureState, currentTime);
     }
 
     isEmpty() {

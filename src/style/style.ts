@@ -1385,7 +1385,11 @@ export class Style extends Evented {
             this.fire(new ErrorEvent(new Error('The feature id parameter must be provided.')));
         }
 
-        tileManager.setFeatureState(sourceLayer, target.id, state);
+        // Get transition configuration and current time
+        const transition = this.getTransition();
+        const currentTime = now();
+        
+        tileManager.setFeatureState(sourceLayer, target.id, state, transition, currentTime);
     }
 
     removeFeatureState(target: FeatureIdentifier, key?: string) {

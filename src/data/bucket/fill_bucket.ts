@@ -128,11 +128,11 @@ export class FillBucket implements Bucket {
 
     update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {
         [_: string]: ImagePosition;
-    }) {
+    }, dashPositions?: any, sourceFeatureState?: any, currentTime?: number) {
         if (!this.stateDependentLayers.length) return;
         this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
             imagePositions
-        });
+        }, sourceFeatureState, currentTime);
     }
 
     addFeatures(options: PopulateParameters, canonical: CanonicalTileID, imagePositions: {

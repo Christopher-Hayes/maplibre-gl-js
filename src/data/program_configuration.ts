@@ -1,9 +1,10 @@
 import {packUint8ToFloat} from '../shaders/encode_attribute';
-import {type Color, supportsPropertyExpression} from '@maplibre/maplibre-gl-style-spec';
+import {type Color, supportsPropertyExpression, interpolates} from '@maplibre/maplibre-gl-style-spec';
 import {register} from '../util/web_worker_transfer';
 import {PossiblyEvaluatedPropertyValue} from '../style/properties';
 import {StructArrayLayout1f4, StructArrayLayout2f8, StructArrayLayout4f16, PatternLayoutArray, DashLayoutArray} from './array_types.g';
-import {clamp} from '../util/util';
+import {clamp, easeCubicInOut} from '../util/util';
+import {now} from '../util/time_control';
 import {patternAttributes} from './bucket/pattern_attributes';
 import {dashAttributes} from './bucket/dash_attributes';
 import {EvaluationParameters} from '../style/evaluation_parameters';
@@ -224,8 +225,53 @@ class SourceExpressionBinder implements AttributeBinder {
         this._setPaintValue(start, newLength, value);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions) {
-        const value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: any, featureId?: string | number, currentTime?: number, property?: string) {
+        let value;
+        
+        if (sourceFeatureState && featureId && currentTime !== undefined && property) {
+            const sourceLayerId = (feature as any).sourceLayer || '_geojsonTileLayer';
+            const transState = sourceFeatureState.getFeatureTransitionState(sourceLayerId, featureId);
+            
+            if (transState && transState.priorState) {
+                // Check if we're in transition using the passed currentTime
+                if (currentTime < transState.transitionEnd) {
+                    // We're in transition - check if we have cached values
+                    transState.cachedValues = transState.cachedValues || {};
+                    
+                    let priorValue, currentValue;
+                    if (transState.cachedValues[property]) {
+                        // Use cached values - no need to re-evaluate expressions!
+                        priorValue = transState.cachedValues[property].prior;
+                        currentValue = transState.cachedValues[property].current;
+                    } else {
+                        // First frame of transition - evaluate and cache
+                        priorValue = this.expression.evaluate(new EvaluationParameters(0, options), feature, transState.priorState);
+                        currentValue = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+                        transState.cachedValues[property] = {prior: priorValue, current: currentValue};
+                    }
+                    
+                    // Calculate interpolation factor
+                    const t = currentTime < transState.transitionBegin ? 
+                        0 : 
+                        Math.min(1, (currentTime - transState.transitionBegin) / (transState.transitionEnd - transState.transitionBegin));
+                    
+                    // Interpolate based on property type
+                    value = this.type === 'color' ?
+                        interpolates.color(priorValue, currentValue, easeCubicInOut(t)) :
+                        interpolates.number(priorValue, currentValue, easeCubicInOut(t));
+                } else {
+                    // Transition complete
+                    value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+                }
+            } else {
+                // No transition
+                value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+            }
+        } else {
+            // No transition state available
+            value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
+        }
+        
         this._setPaintValue(start, end, value);
     }
 
@@ -298,9 +344,68 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
         this._setPaintValue(start, newLength, min, max);
     }
 
-    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions) {
-        const min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
-        const max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+    updatePaintArray(start: number, end: number, feature: Feature, featureState: FeatureState, options: PaintOptions, sourceFeatureState?: any, featureId?: string | number, currentTime?: number, property?: string) {
+        let min, max;
+        
+        if (sourceFeatureState && featureId && currentTime !== undefined && property) {
+            const sourceLayerId = (feature as any).sourceLayer || '_geojsonTileLayer';
+            const transState = sourceFeatureState.getFeatureTransitionState(sourceLayerId, featureId);
+            
+            if (transState && transState.priorState) {
+                // Check if we're in transition using the passed currentTime
+                if (currentTime < transState.transitionEnd) {
+                    // We're in transition - check if we have cached values
+                    transState.cachedValues = transState.cachedValues || {};
+                    
+                    // For composite expressions, we cache both min and max
+                    const minKey = property + '_min';
+                    const maxKey = property + '_max';
+                    
+                    let priorMin, priorMax, currentMin, currentMax;
+                    if (transState.cachedValues[minKey] && transState.cachedValues[maxKey]) {
+                        // Use cached values - no need to re-evaluate expressions!
+                        priorMin = transState.cachedValues[minKey].prior;
+                        currentMin = transState.cachedValues[minKey].current;
+                        priorMax = transState.cachedValues[maxKey].prior;
+                        currentMax = transState.cachedValues[maxKey].current;
+                    } else {
+                        // First frame of transition - evaluate and cache
+                        priorMin = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, transState.priorState);
+                        priorMax = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, transState.priorState);
+                        currentMin = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                        currentMax = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+                        transState.cachedValues[minKey] = {prior: priorMin, current: currentMin};
+                        transState.cachedValues[maxKey] = {prior: priorMax, current: currentMax};
+                    }
+                    
+                    // Calculate interpolation factor
+                    const t = currentTime < transState.transitionBegin ? 
+                        0 : 
+                        Math.min(1, (currentTime - transState.transitionBegin) / (transState.transitionEnd - transState.transitionBegin));
+                    
+                    // Interpolate based on property type
+                    min = this.type === 'color' ?
+                        interpolates.color(priorMin, currentMin, easeCubicInOut(t)) :
+                        interpolates.number(priorMin, currentMin, easeCubicInOut(t));
+                    max = this.type === 'color' ?
+                        interpolates.color(priorMax, currentMax, easeCubicInOut(t)) :
+                        interpolates.number(priorMax, currentMax, easeCubicInOut(t));
+                } else {
+                    // Transition complete
+                    min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                    max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+                }
+            } else {
+                // No transition
+                min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+                max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+            }
+        } else {
+            // No transition state available
+            min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);
+            max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1, options), feature, featureState);
+        }
+        
         this._setPaintValue(start, end, min, max);
     }
 
@@ -566,7 +671,9 @@ export class ProgramConfiguration {
         featureMap: FeaturePositionMap,
         vtLayer: VectorTileLayer,
         layer: TypedStyleLayer,
-        options: PaintOptions
+        options: PaintOptions,
+        sourceFeatureState?: any,
+        currentTime?: number
     ): boolean {
         let dirty: boolean = false;
         for (const id in featureStates) {
@@ -582,7 +689,7 @@ export class ProgramConfiguration {
                         //AHM: Remove after https://github.com/mapbox/mapbox-gl-js/issues/6255
                         const value = (layer.paint as any).get(property);
                         binder.expression = value.value;
-                        binder.updatePaintArray(pos.start, pos.end, feature, featureStates[id], options);
+                        binder.updatePaintArray(pos.start, pos.end, feature, featureStates[id], options, sourceFeatureState, id, currentTime, property);
                         dirty = true;
                     }
                 }
@@ -728,9 +835,9 @@ export class ProgramConfigurationSet<Layer extends TypedStyleLayer> {
         this.needsUpload = true;
     }
 
-    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions) {
+    updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions, sourceFeatureState?: any, currentTime?: number) {
         for (const layer of layers) {
-            this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options) || this.needsUpload;
+            this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options, sourceFeatureState, currentTime) || this.needsUpload;
         }
     }
 
