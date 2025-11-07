@@ -1,15 +1,16 @@
 import {packUint8ToFloat} from '../shaders/encode_attribute';
-import {type Color, supportsPropertyExpression, interpolates} from '@maplibre/maplibre-gl-style-spec';
+import {type Color, supportsPropertyExpression} from '@maplibre/maplibre-gl-style-spec';
 import {register} from '../util/web_worker_transfer';
 import {PossiblyEvaluatedPropertyValue} from '../style/properties';
 import {StructArrayLayout1f4, StructArrayLayout2f8, StructArrayLayout4f16, PatternLayoutArray, DashLayoutArray} from './array_types.g';
-import {clamp, easeCubicInOut} from '../util/util';
+import {clamp} from '../util/util';
 import {now} from '../util/time_control';
 import {patternAttributes} from './bucket/pattern_attributes';
 import {dashAttributes} from './bucket/dash_attributes';
 import {EvaluationParameters} from '../style/evaluation_parameters';
 import {FeaturePositionMap} from './feature_position_map';
 import {type Uniform, Uniform1f, UniformColor, Uniform4f} from '../render/uniform_binding';
+import {calculateInterpolationFactor, interpolateValue} from '../util/transition_helper';
 
 import type {UniformLocations} from '../render/uniform_binding';
 
@@ -250,15 +251,9 @@ class SourceExpressionBinder implements AttributeBinder {
                         transState.cachedValues[property] = {prior: priorValue, current: currentValue};
                     }
                     
-                    // Calculate interpolation factor
-                    const t = currentTime < transState.transitionBegin ? 
-                        0 : 
-                        Math.min(1, (currentTime - transState.transitionBegin) / (transState.transitionEnd - transState.transitionBegin));
-                    
-                    // Interpolate based on property type
-                    value = this.type === 'color' ?
-                        interpolates.color(priorValue, currentValue, easeCubicInOut(t)) :
-                        interpolates.number(priorValue, currentValue, easeCubicInOut(t));
+                    // Calculate interpolation factor and interpolate
+                    const t = calculateInterpolationFactor(currentTime, transState.transitionBegin, transState.transitionEnd);
+                    value = interpolateValue(priorValue, currentValue, t, this.type as 'color' | 'number');
                 } else {
                     // Transition complete
                     value = this.expression.evaluate(new EvaluationParameters(0, options), feature, featureState);
@@ -378,18 +373,10 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
                         transState.cachedValues[maxKey] = {prior: priorMax, current: currentMax};
                     }
                     
-                    // Calculate interpolation factor
-                    const t = currentTime < transState.transitionBegin ? 
-                        0 : 
-                        Math.min(1, (currentTime - transState.transitionBegin) / (transState.transitionEnd - transState.transitionBegin));
-                    
-                    // Interpolate based on property type
-                    min = this.type === 'color' ?
-                        interpolates.color(priorMin, currentMin, easeCubicInOut(t)) :
-                        interpolates.number(priorMin, currentMin, easeCubicInOut(t));
-                    max = this.type === 'color' ?
-                        interpolates.color(priorMax, currentMax, easeCubicInOut(t)) :
-                        interpolates.number(priorMax, currentMax, easeCubicInOut(t));
+                    // Calculate interpolation factor and interpolate
+                    const t = calculateInterpolationFactor(currentTime, transState.transitionBegin, transState.transitionEnd);
+                    min = interpolateValue(priorMin, currentMin, t, this.type as 'color' | 'number');
+                    max = interpolateValue(priorMax, currentMax, t, this.type as 'color' | 'number');
                 } else {
                     // Transition complete
                     min = this.expression.evaluate(new EvaluationParameters(this.zoom, options), feature, featureState);

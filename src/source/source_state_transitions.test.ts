@@ -1,5 +1,5 @@
 import {describe, test, expect} from 'vitest';
-import {SourceFeatureState} from '../../../src/source/source_state';
+import {SourceFeatureState} from './source_state';
 
 describe('SourceFeatureState transitions', () => {
     test('tracks prior state and transition timing when transition is enabled', () => {

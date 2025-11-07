@@ -1,4 +1,4 @@
-import {clone, extend, easeCubicInOut} from '../util/util';
+import {clone, extend} from '../util/util';
 import {interpolates, type Color, type StylePropertySpecification, normalizePropertyExpression,
     type Feature,
     type FeatureState,
@@ -8,6 +8,7 @@ import {interpolates, type Color, type StylePropertySpecification, normalizeProp
     type PropertyValueSpecification} from '@maplibre/maplibre-gl-style-spec';
 import {register} from '../util/web_worker_transfer';
 import {EvaluationParameters} from './evaluation_parameters';
+import {calculateInterpolationFactor} from '../util/transition_helper';
 
 import {type CanonicalTileID} from '../tile/tile_id';
 
@@ -260,8 +261,8 @@ class TransitioningPropertyValue<T, R> {
             return prior.possiblyEvaluate(parameters, canonical, availableImages);
         } else {
             // Interpolate between recursively-calculated prior value and final.
-            const t = (now - this.begin) / (this.end - this.begin);
-            return this.property.interpolate(prior.possiblyEvaluate(parameters, canonical, availableImages), finalValue, easeCubicInOut(t));
+            const t = calculateInterpolationFactor(now, this.begin, this.end);
+            return this.property.interpolate(prior.possiblyEvaluate(parameters, canonical, availableImages), finalValue, t);
         }
     }
 }

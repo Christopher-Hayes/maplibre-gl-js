@@ -7,7 +7,7 @@
     <script src="../../dist/maplibre-gl-dev.js"></script>
     <link href="../../dist/maplibre-gl.css" rel="stylesheet">
     <style>
-        body { margin: 0; padding: 0; }
+        body { margin: 0; padding: 0; background: #111; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         .info {
             position: absolute;
@@ -19,6 +19,34 @@
             font-family: sans-serif;
             font-size: 12px;
         }
+        .controls {
+            position: absolute;
+            top: 120px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: sans-serif;
+            font-size: 12px;
+            min-width: 200px;
+        }
+        .controls label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .controls input[type="range"] {
+            width: 100%;
+        }
+        .heading-test {
+            position: absolute;
+            left: 2rem;
+            bottom: 2rem;
+            color: white;
+            padding: 2rem;
+            font-size: 4rem;
+            font-family: sans-serif;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -27,6 +55,11 @@
     <strong>Feature State Transitions Demo</strong><br>
     Hover over the circles to see smooth color transitions<br>
     using <code>setFeatureState()</code>
+</div>
+<h1 class="heading-test">setFeatureState() with Transitions</h1>
+<div class="controls">
+    <label for="sizeSlider">Circle Size: <span id="sizeValue">30</span></label>
+    <input type="range" id="sizeSlider" min="10" max="90" value="30" step="20">
 </div>
 
 <script>
@@ -68,12 +101,12 @@
                     type: 'circle',
                     source: 'points',
                     paint: {
-                        'circle-radius': 30,
+                        'circle-radius': ['feature-state', 'size'],
                         'circle-color': [
                             'case',
                             ['boolean', ['feature-state', 'hover'], false],
                             '#ff0000',  // Red when hovering
-                            '#0000ff'   // Blue when not hovering
+                            '#ffffff'   // White when not hovering
                         ],
                         'circle-opacity': [
                             'case',
@@ -95,6 +128,39 @@
     });
 
     let hoveredFeatureId = null;
+
+    // Initialize all features with default size
+    map.on('load', () => {
+        const features = map.querySourceFeatures('points');
+        features.forEach(feature => {
+            if (feature.id !== undefined) {
+                map.setFeatureState(
+                    {source: 'points', id: feature.id},
+                    {size: 30}
+                );
+            }
+        });
+    });
+
+    // Size slider handler
+    const sizeSlider = document.getElementById('sizeSlider');
+    const sizeValue = document.getElementById('sizeValue');
+    
+    sizeSlider.addEventListener('input', (e) => {
+        const newSize = parseInt(e.target.value);
+        sizeValue.textContent = newSize;
+        
+        // Update size for all features - this should transition smoothly!
+        const features = map.querySourceFeatures('points');
+        features.forEach(feature => {
+            if (feature.id !== undefined) {
+                map.setFeatureState(
+                    {source: 'points', id: feature.id},
+                    {size: newSize}
+                );
+            }
+        });
+    });
 
     map.on('mousemove', 'points-layer', (e) => {
         if (e.features.length > 0) {
