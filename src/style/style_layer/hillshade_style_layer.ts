@@ -28,10 +28,10 @@ export class HillshadeStyleLayer extends StyleLayer {
 
         // ensure all illumination properties have the same length
         const numIlluminationSources = Math.max(direction.length, altitude.length, highlightColor.length, shadowColor.length);
-        direction = direction.concat(Array(numIlluminationSources - direction.length).fill(direction.at(-1)));
-        altitude = altitude.concat(Array(numIlluminationSources - altitude.length).fill(altitude.at(-1)));
-        highlightColor = highlightColor.concat(Array(numIlluminationSources - highlightColor.length).fill(highlightColor.at(-1)));
-        shadowColor = shadowColor.concat(Array(numIlluminationSources - shadowColor.length).fill(shadowColor.at(-1)));
+        direction = direction.concat(Array(numIlluminationSources - direction.length).fill(direction[direction.length - 1]));
+        altitude = altitude.concat(Array(numIlluminationSources - altitude.length).fill(altitude[altitude.length - 1]));
+        highlightColor = highlightColor.concat(Array(numIlluminationSources - highlightColor.length).fill(highlightColor[highlightColor.length - 1]));
+        shadowColor = shadowColor.concat(Array(numIlluminationSources - shadowColor.length).fill(shadowColor[shadowColor.length - 1]));
 
         const altitudeRadians = altitude.map(degreesToRadians);
         const directionRadians = direction.map(degreesToRadians);
