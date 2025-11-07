@@ -117,7 +117,7 @@ describe('Actor', () => {
 
         const p2 = new Promise((resolve) => (setTimeout(resolve, 500)));
 
-        await Promise.any([p1, p2]);
+        await Promise.race([p1, p2]);
         expect(received).toBeFalsy();
     });
 
@@ -173,7 +173,7 @@ describe('Actor', () => {
 
         const p2 = sleep(500);
 
-        await Promise.any([p1, p2]);
+        await Promise.race([p1, p2]);
         expect(received).toBeFalsy();
         expect(spy).not.toHaveBeenCalled();
     });

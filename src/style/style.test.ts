@@ -1174,7 +1174,7 @@ describe('Style.removeSource', () => {
         const promise = style.once('error');
         style.removeLayer('mapLibre-layer');
         style.removeSource('mapLibre-source');
-        await expect(Promise.any([promise, sleep(100)])).resolves.toBeUndefined();
+        await expect(Promise.race([promise, sleep(100)])).resolves.toBeUndefined();
     });
 
     test('tears down source event forwarding', async () => {
